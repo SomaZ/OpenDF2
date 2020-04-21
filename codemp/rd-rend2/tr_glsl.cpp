@@ -130,7 +130,7 @@ static uniformInfo_t uniformsInfo[] =
 
 	{ "u_CubeMapInfo", GLSL_VEC4, 1 },
 
-	{ "u_BoneMatrices",			GLSL_MAT4x3, 20 },
+	{ "u_BoneMatrices",			GLSL_MAT4x3, 64 },
 	{ "u_AlphaTestType",		GLSL_INT, 1 },
 
 	{ "u_FXVolumetricBase",		GLSL_FLOAT, 1 },

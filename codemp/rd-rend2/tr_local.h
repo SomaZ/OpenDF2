@@ -49,7 +49,7 @@ typedef unsigned int glIndex_t;
 // 14 bits
 // can't be increased without changing bit packing for drawsurfs
 // see QSORT_SHADERNUM_SHIFT
-#define SHADERNUM_BITS	14
+#define SHADERNUM_BITS	12
 #define MAX_SHADERS		(1<<SHADERNUM_BITS)
 
 #define	MAX_FBOS      64
@@ -1447,7 +1447,7 @@ the drawsurf sort data is packed into a single 32 bit value so it can be
 compared quickly during the qsorting process
 */
 #define	QSORT_CUBEMAP_SHIFT		0
-#define QSORT_CUBEMAP_BITS		6
+#define QSORT_CUBEMAP_BITS		5
 #define QSORT_CUBEMAP_MASK		((1 << QSORT_CUBEMAP_BITS) - 1)
 
 #define QSORT_ENTITYNUM_SHIFT	(QSORT_CUBEMAP_SHIFT + QSORT_CUBEMAP_BITS)
@@ -1458,7 +1458,11 @@ compared quickly during the qsorting process
 #define QSORT_SHADERNUM_BITS	SHADERNUM_BITS
 #define QSORT_SHADERNUM_MASK	((1 << QSORT_SHADERNUM_BITS) - 1)
 
-#define QSORT_POSTRENDER_SHIFT	(QSORT_SHADERNUM_SHIFT + QSORT_SHADERNUM_BITS)
+#define	QSORT_PRIORITY_SHIFT	(QSORT_SHADERNUM_SHIFT + QSORT_SHADERNUM_BITS)
+#define QSORT_PRIORITY_BITS		2
+#define QSORT_PRIORITY_MASK		((1 << QSORT_PRIORITY_BITS) - 1)
+
+#define QSORT_POSTRENDER_SHIFT	(QSORT_PRIORITY_SHIFT + QSORT_PRIORITY_BITS)
 #define QSORT_POSTRENDER_BITS	1
 #define QSORT_POSTRENDER_MASK	((1 << QSORT_POSTRENDER_BITS) - 1)
 
@@ -1468,6 +1472,7 @@ compared quickly during the qsorting process
 
 typedef struct drawSurf_s {
 	uint32_t sort; // bit combination for fast compares
+	uint32_t depthSort;
 	uint32_t dlightBits;
 	surfaceType_t *surface; // any of surface*_t
 	int fogIndex;
@@ -1972,6 +1977,10 @@ void		R_Modellist_f (void);
 
 //====================================================
 
+
+static void R_RadixSort(drawSurf_t *source, int size);
+static void R_DepthRadixSort(drawSurf_t *source, int size);
+
 #define	MAX_DRAWIMAGES			2048
 #define	MAX_SKINS				1024
 
@@ -2037,6 +2046,7 @@ typedef struct glstate_s {
 	int				vertexAttribsTexCoordOffset[2];
 	qboolean        vertexAnimation;
 	qboolean		skeletalAnimation;
+	qboolean		genShadows;
 	mat4x3_t       *boneMatrices;
 	int				numBones;
 	shaderProgram_t *currentProgram;
@@ -2604,7 +2614,7 @@ void R_AddLightningBoltSurfaces( trRefEntity_t *e );
 void R_AddPolygonSurfaces( const trRefdef_t *refdef );
 
 void R_DecomposeSort( uint32_t sort, int *entityNum, shader_t **shader, int *cubemap, int *postRender );
-uint32_t R_CreateSortKey(int entityNum, int sortedShaderIndex, int cubemapIndex, int postRender);
+uint32_t R_CreateSortKey(int entityNum, int sortedShaderIndex, int cubemapIndex, int priority, int postRender);
 void R_AddDrawSurf( surfaceType_t *surface, int entityNum, shader_t *shader, 
 				   int fogIndex, int dlightMap, int postRender, int cubemap );
 bool R_IsPostRenderEntity ( const trRefEntity_t *refEntity );
@@ -3083,6 +3093,8 @@ public:
 	CBoneCache *boneCache;
 	mdxmVBOMesh_t *vboMesh;
 
+	qboolean genShadows;
+
 	// pointer to surface data loaded into file - only used by client renderer
 	// DO NOT USE IN GAME SIDE - if there is a vid restart this will be out of
 	// wack on the game
@@ -3137,12 +3149,14 @@ public:
 		alternateTex = nullptr;
 		goreChain = nullptr;
 		vboMesh = nullptr;
+		genShadows = qfalse;
 	}
 #endif
 };
 
 void R_AddGhoulSurfaces( trRefEntity_t *ent, int entityNum );
 void RB_SurfaceGhoul( CRenderableSurface *surface );
+void RB_TransformBones(CRenderableSurface *surf);
 /*
 Ghoul2 Insert End
 */
@@ -3469,8 +3483,6 @@ void RE_RegisterModels_StoreShaderRequest(const char *psModelFileName, const cha
 qboolean ShaderHashTableExists(void);
 void R_ImageLoader_Init(void);
 
-void RB_SurfaceGhoul( CRenderableSurface *surf );
-
 class Allocator;
 GPUProgramDesc ParseProgramSource( Allocator& allocator, const char *text );
 
@@ -3590,7 +3602,7 @@ public:
 private:
 	bool failed;
 	shaderProgram_t *shaderProgram;
-	char scratchBuffer[2048];
+	char scratchBuffer[4096];
 	Allocator scratch;
 };
 

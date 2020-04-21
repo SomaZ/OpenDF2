@@ -802,6 +802,7 @@ UniformDataWriter& UniformDataWriter::SetUniformMatrix4x3( uniform_t uniform, co
 	if ( !memory )
 	{
 		failed = true;
+		ri.Printf(PRINT_ALL, "Failed writing Uniform Matrix 4x3\n");
 		return *this;
 	}
 
@@ -822,6 +823,7 @@ UniformDataWriter& UniformDataWriter::SetUniformMatrix4x4( uniform_t uniform, co
 	if ( !memory )
 	{
 		failed = true;
+		ri.Printf(PRINT_ALL, "Failed writing Uniform Matrix 4x4\n");
 		return *this;
 	}
 
@@ -1438,10 +1440,12 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs )
 
 	if ( backEnd.depthFill )
 	{
+		//R_DepthRadixSort(drawSurfs, numDrawSurfs);
 		RB_SubmitDrawSurfsForDepthFill(drawSurfs, numDrawSurfs, originalTime);
 	}
 	else
 	{
+		//R_RadixSort(drawSurfs, numDrawSurfs);
 		RB_SubmitDrawSurfs(drawSurfs, numDrawSurfs, originalTime);
 	}
 
@@ -2254,6 +2258,9 @@ static void RB_TransformAllAnimations( drawSurf_t *drawSurfs, int numDrawSurfs )
 		{
 			continue;
 		}
+
+		CRenderableSurface *surf = (CRenderableSurface *)drawSurf->surface;
+		RB_TransformBones(surf);
 	}
 }
 

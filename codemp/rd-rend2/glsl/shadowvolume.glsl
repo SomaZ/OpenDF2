@@ -12,7 +12,7 @@ uniform mat4 u_ModelViewProjectionMatrix;
 #if defined(USE_VERTEX_ANIMATION)
 uniform float u_VertexLerp;
 #elif defined(USE_SKELETAL_ANIMATION)
-uniform mat4x3 u_BoneMatrices[20];
+uniform mat4x3 u_BoneMatrices[64];
 #endif
 
 out vec3 var_Position;

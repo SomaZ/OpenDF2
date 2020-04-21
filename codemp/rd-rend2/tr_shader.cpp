@@ -3432,9 +3432,10 @@ static void FixRenderCommandList( int newShader ) {
 					for( i = 0, drawSurf = ds_cmd->drawSurfs; i < ds_cmd->numDrawSurfs; i++, drawSurf++ ) {
 						R_DecomposeSort( drawSurf->sort, &entityNum, &shader, &cubemap, &postRender );
 						sortedIndex = (( drawSurf->sort >> QSORT_SHADERNUM_SHIFT ) & (MAX_SHADERS-1));
+						int priority = 0;
 						if( sortedIndex >= newShader ) {
 							sortedIndex++;
-							drawSurf->sort = R_CreateSortKey(entityNum, sortedIndex, cubemap, postRender);
+							drawSurf->sort = R_CreateSortKey(entityNum, sortedIndex, cubemap, priority, postRender);
 						}
 					}
 					curCmd = (const void *)(ds_cmd + 1);

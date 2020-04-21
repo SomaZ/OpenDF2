@@ -1245,7 +1245,7 @@ static void RB_FogPass( shaderCommands_t *input, const fog_t *fog, const VertexA
 
 	RB_FillDrawCommand(item.draw, GL_TRIANGLES, 1, input);
 
-	uint32_t key = RB_CreateSortKey(item, 15, input->shader->sort);
+	uint32_t key = RB_CreateSortKey(item, 14, input->shader->sort);
 	RB_AddDrawItem(backEndData->currentPass, key, item);
 }
 
@@ -1507,7 +1507,8 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 			uniformDataWriter.SetUniformFloat(UNIFORM_TIME, tess.shaderTime);
 		}
 
-		uniformDataWriter.SetUniformVec4(UNIFORM_DISINTEGRATION, disintegrationInfo);
+		if (backEnd.currentEntity->e.renderfx & (RF_DISINTEGRATE1 | RF_DISINTEGRATE2))
+			uniformDataWriter.SetUniformVec4(UNIFORM_DISINTEGRATION, disintegrationInfo);
 
 		if ( input->fogNum ) {
 			const fog_t *fog = tr.world->fogs + input->fogNum;
@@ -1892,10 +1893,6 @@ void RB_StageIteratorGeneric( void )
 			RB_RenderShadowmap(input, &vertexArrays);
 		}
 	}
-	else if (input->shader == tr.shadowShader && r_shadows->integer == 2)
-	{
-		RB_ShadowTessEnd( input, &vertexArrays );
-	}
 	else
 	{
 		RB_IterateStagesGeneric( input, &vertexArrays );
@@ -1909,6 +1906,14 @@ void RB_StageIteratorGeneric( void )
 				!(tess.shader->surfaceFlags & (SURF_NODLIGHT | SURF_SKY)))
 		{
 			ProjectPshadowVBOGLSL( input, &vertexArrays );
+		}
+
+		//
+		// volumeshadows!
+		//
+		if (glState.genShadows && r_shadows->integer == 2)
+		{
+			RB_ShadowTessEnd(input, &vertexArrays);
 		}
 
 		// 

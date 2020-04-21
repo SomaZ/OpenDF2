@@ -59,7 +59,7 @@ uniform int u_ColorGen;
 #if defined(USE_VERTEX_ANIMATION)
 uniform float u_VertexLerp;
 #elif defined(USE_SKELETAL_ANIMATION)
-uniform mat4x3 u_BoneMatrices[20];
+uniform mat4x3 u_BoneMatrices[64];
 #endif
 
 #if defined(USE_LIGHT_VECTOR)

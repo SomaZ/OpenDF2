@@ -1708,6 +1708,29 @@ static QINLINE void R_Radix( int byte, int size, drawSurf_t *source, drawSurf_t 
     dest[ index[ *sortKey ]++ ] = source[ i ];
 }
 
+static QINLINE void R_DepthRadix(int byte, int size, drawSurf_t *source, drawSurf_t *dest)
+{
+	int           count[256] = { 0 };
+	int           index[256];
+	int           i;
+	unsigned char *sortKey = NULL;
+	unsigned char *end = NULL;
+
+	sortKey = ((unsigned char *)&source[0].depthSort) + byte;
+	end = sortKey + (size * sizeof(drawSurf_t));
+	for (; sortKey < end; sortKey += sizeof(drawSurf_t))
+		++count[*sortKey];
+
+	index[0] = 0;
+
+	for (i = 1; i < 256; ++i)
+		index[i] = index[i - 1] + count[i - 1];
+
+	sortKey = ((unsigned char *)&source[0].depthSort) + byte;
+	for (i = 0; i < size; ++i, sortKey += sizeof(drawSurf_t))
+		dest[index[*sortKey]++] = source[i];
+}
+
 /*
 ===============
 R_RadixSort
@@ -1731,6 +1754,29 @@ static void R_RadixSort( drawSurf_t *source, int size )
 #endif //Q3_LITTLE_ENDIAN
 }
 
+/*
+===============
+R_RadixSort
+
+Radix sort with 4 byte size buckets
+===============
+*/
+static void R_DepthRadixSort(drawSurf_t *source, int size)
+{
+	static drawSurf_t scratch[MAX_DRAWSURFS];
+#ifdef Q3_LITTLE_ENDIAN
+	R_DepthRadix(0, size, source, scratch);
+	R_DepthRadix(1, size, scratch, source);
+	R_DepthRadix(2, size, source, scratch);
+	R_DepthRadix(3, size, scratch, source);
+#else
+	R_Radix(3, size, source, scratch);
+	R_Radix(2, size, scratch, source);
+	R_Radix(1, size, source, scratch);
+	R_Radix(0, size, scratch, source);
+#endif //Q3_LITTLE_ENDIAN
+}
+
 //==========================================================================================
 
 bool R_IsPostRenderEntity ( const trRefEntity_t *refEntity )
@@ -1747,20 +1793,40 @@ R_DecomposeSort
 */
 void R_DecomposeSort( uint32_t sort, int *entityNum, shader_t **shader, int *cubemap, int *postRender )
 {
-	*shader = tr.sortedShaders[ ( sort >> QSORT_SHADERNUM_SHIFT ) & QSORT_SHADERNUM_MASK ];
-	*postRender = (sort >> QSORT_POSTRENDER_SHIFT ) & QSORT_POSTRENDER_MASK;
-	*entityNum = (sort >> QSORT_ENTITYNUM_SHIFT) & QSORT_ENTITYNUM_MASK;
+	int priority = (sort >> QSORT_PRIORITY_SHIFT) & QSORT_PRIORITY_MASK;
+
+	if (priority == 0)
+	{
+		*shader = tr.sortedShaders[(sort >> QSORT_SHADERNUM_SHIFT) & QSORT_SHADERNUM_MASK];
+		*entityNum = (sort >> QSORT_ENTITYNUM_SHIFT) & QSORT_ENTITYNUM_MASK;
+	}
+	else
+	{
+		*shader = tr.sortedShaders[(sort >> QSORT_ENTITYNUM_SHIFT) & QSORT_ENTITYNUM_MASK];
+		*entityNum = (sort >> QSORT_SHADERNUM_SHIFT) & QSORT_SHADERNUM_MASK;
+	}
+	*postRender = (sort >> QSORT_POSTRENDER_SHIFT) & QSORT_POSTRENDER_MASK;
 	*cubemap = (sort >> QSORT_CUBEMAP_SHIFT ) & QSORT_CUBEMAP_MASK;
 }
 
-uint32_t R_CreateSortKey(int entityNum, int sortedShaderIndex, int cubemapIndex, int postRender)
+uint32_t R_CreateSortKey(int entityNum, int sortedShaderIndex, int cubemapIndex, int priority, int postRender)
 {
 	uint32_t key = 0;
 
-	key |= (sortedShaderIndex & QSORT_SHADERNUM_MASK) << QSORT_SHADERNUM_SHIFT;
+	if (priority == 0)
+	{
+		key |= (sortedShaderIndex & QSORT_SHADERNUM_MASK) << QSORT_SHADERNUM_SHIFT;
+		key |= (entityNum & QSORT_ENTITYNUM_MASK) << QSORT_ENTITYNUM_SHIFT;
+	}
+	else
+	{
+		key |= (entityNum & QSORT_SHADERNUM_MASK) << QSORT_SHADERNUM_SHIFT;
+		key |= (sortedShaderIndex & QSORT_ENTITYNUM_MASK) << QSORT_ENTITYNUM_SHIFT;
+	}
+	
 	key |= (cubemapIndex & QSORT_CUBEMAP_MASK) << QSORT_CUBEMAP_SHIFT;
 	key |= (postRender & QSORT_POSTRENDER_MASK) << QSORT_POSTRENDER_SHIFT;
-	key |= (entityNum & QSORT_ENTITYNUM_MASK) << QSORT_ENTITYNUM_SHIFT;
+	key |= (priority & QSORT_PRIORITY_MASK) << QSORT_PRIORITY_SHIFT;
 
 	return key;
 }
@@ -1792,12 +1858,28 @@ void R_AddDrawSurf(
 		return;
 	}
 
+	//render priority, smaller is higher priority
+	int render_priority;
+	switch (*surface) {
+	case SF_MDX:
+		render_priority = 2;
+		break;
+	case SF_VBO_MDVMESH:
+		render_priority = 1;
+		break;
+	default:
+		render_priority = 0;
+		break;
+	}
+
 	// instead of checking for overflow, we just mask the index
 	// so it wraps around
 	index = tr.refdef.numDrawSurfs & DRAWSURF_MASK;
 	surf = tr.refdef.drawSurfs + index;
 
-	surf->sort = R_CreateSortKey(entityNum, shader->sortedIndex, cubemap, postRender);
+	surf->sort = R_CreateSortKey(entityNum, shader->sortedIndex, cubemap, 0, postRender);
+	surf->depthSort = R_CreateSortKey(entityNum, shader->sortedIndex, cubemap, render_priority, postRender);
+
 	surf->dlightBits = dlightMap;
 	surf->surface = surface;
 	surf->fogIndex = fogIndex;
